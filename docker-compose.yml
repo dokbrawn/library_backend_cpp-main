@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: library_backend
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./flutter_frontend_arm
+      dockerfile: Dockerfile
+      platform: linux/arm64
+    container_name: library_frontend
+    depends_on:
+      - backend
+    volumes:
+      - ./flutter_frontend_arm/build_output:/app/build_output
+    command: bash

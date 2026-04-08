@@ -1,0 +1,25 @@
+FROM --platform=linux/arm64 ubuntu:22.04
+
+# Устанавливаем необходимые пакеты
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libegl1 libgles2 libgl1-mesa-dri \
+    libx11-6 libxext6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
+    libpulse0 libasound2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем bundle и engine из ранее собранного образа
+COPY --from=library-flutter:arm64 /app/final/bundle /app/bundle
+COPY --from=library-flutter:arm64 /opt/flutter/bin/cache/artifacts/engine/linux-arm64 /app/engine
+
+WORKDIR /app
+
+# Запускаем через flutter-pi (если flutter-pi установлен в предыдущем образе)
+# Если нет — просто выводим информацию
+CMD echo "=====================================" && \
+    echo "Flutter bundle готов к запуску" && \
+    echo "Размер bundle: $(du -sh /app/bundle)" && \
+    echo "=====================================" && \
+    ls -la /app/bundle && \
+    echo "" && \
+    echo "Чтобы запустить приложение, нужно установить flutter-pi." && \
+    echo "Пока показываем содержимое bundle."

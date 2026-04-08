@@ -1,0 +1,11 @@
+build/
+*.exe
+.vscode/
+.git/
+*.md
+*.sln
+*.vcxproj*
+x64/
+x86/
+Debug/
+Release/
