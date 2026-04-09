@@ -163,13 +163,12 @@ static double fetchOpenLibraryWorkRating(const string& workKey) {
     if (workKey.empty() || workKey.rfind("/works/", 0) != 0) return 0.0;
     const string url = "https://openlibrary.org" + workKey + "/ratings.json";
     
-    // БЕЗ User-Agent (вызывал 503)
+    // ДОБАВЛЕН ФЛАГ -k ДЛЯ ОБХОДА ПРОБЛЕМ SSL В DOCKER/QEMU
     const string cmd = withSilentStderr(
-        "curl -fsSL --max-time 20 \"" + url + "\"");
+        "curl -fsSL -k --max-time 20 \"" + url + "\"");
     const string resp = readCommandOutput(cmd);
     if (resp.empty()) return 0.0;
     
-    // Парсим {"summary": {"average": 3.6, ...}}
     size_t summaryPos = resp.find("\"summary\"");
     double avg = 0.0;
     if (summaryPos != string::npos) {
@@ -232,8 +231,6 @@ static string normalizeLower(const string& value) {
     return out;
 }
 
-// ==================== ИЗВЛЕЧЕНИЕ ФАМИЛИИ АВТОРА ====================
-
 static string extractLastName(const string& author) {
     if (author.empty()) return "";
     string a = trim(author);
@@ -250,8 +247,6 @@ static string extractLastName(const string& author) {
     if (parts.size() >= 2) return parts.back();
     return parts[0];
 }
-
-// ==================== ПОИСК ПО ВХОЖДЕНИЮ СТРОКИ ====================
 
 static bool containsSubstring(const string& text, const string& pattern) {
     if (pattern.empty()) return true;
@@ -916,10 +911,11 @@ vector<OpenLibraryCandidate> LibraryBackendService::lookupOpenLibrary(const stri
         circuitBreakerUntil_ = {};
     }
     
+    // ЛЯМБДА ОПРЕДЕЛЕНА СТРОГО ВНУТРИ ФУНКЦИИ ДО ИСПОЛЬЗОВАНИЯ
     auto buildOpenLibraryUrl = [&](const string& mode) {
         string base = "https://openlibrary.org/search.json?";
         if (mode == "title") base += "title=" + urlEncode(normalized);
-        else base += "q=" + urlEncode(normalized);
+        else base += "title=" + urlEncode(normalized) + "&language=rus";
         base += "&limit=" + to_string(limit) +
                 "&fields=title,author_name,first_publish_year,isbn,publisher,cover_i,language,subject,rating_average,first_sentence,key";
         return base;
@@ -928,9 +924,9 @@ vector<OpenLibraryCandidate> LibraryBackendService::lookupOpenLibrary(const stri
     string resp;
     bool ok = false;
     for (int attempt = 0; attempt < MAX_RETRIES; ++attempt) {
-        // БЕЗ User-Agent (вызывал 503)
+        // ДОБАВЛЕН ФЛАГ -k ДЛЯ ОБХОДА ПРОБЛЕМ SSL В ЭМУЛЯЦИИ
         const string cmd = withSilentStderr(
-            "curl -fsSL --max-time 30 \"" + buildOpenLibraryUrl("q") + "\"");
+            "curl -fsSL -k --max-time 30 \"" + buildOpenLibraryUrl("q") + "\"");
         resp = readCommandOutput(cmd);
         if (!resp.empty() && resp.find("\"docs\"") != string::npos) { ok = true; break; }
         logMessage("WARN", "OpenLibrary attempt " + to_string(attempt+1) + " failed");
@@ -938,8 +934,9 @@ vector<OpenLibraryCandidate> LibraryBackendService::lookupOpenLibrary(const stri
     }
     
     if (!ok) {
+        // ДОБАВЛЕН ФЛАГ -k И ЗДЕСЬ
         const string cmd = withSilentStderr(
-            "curl -fsSL --max-time 30 \"" + buildOpenLibraryUrl("title") + "\"");
+            "curl -fsSL -k --max-time 30 \"" + buildOpenLibraryUrl("title") + "\"");
         resp = readCommandOutput(cmd);
         if (!resp.empty() && resp.find("\"docs\"") != string::npos) ok = true;
     }
@@ -977,7 +974,6 @@ vector<OpenLibraryCandidate> LibraryBackendService::lookupOpenLibrary(const stri
             candidate.rating = fetchOpenLibraryWorkRating(workKey);
         }
         
-        // ИСПРАВЛЕНО: Жанры через запятую
         string subject = jsonStringFromArray(doc, "subject");
         if (!subject.empty()) {
             size_t commaPos = subject.find(',');
@@ -1015,8 +1011,9 @@ vector<OpenLibraryCandidate> LibraryBackendService::lookupGoogleBooks(const stri
     bool ok = false;
     
     for (int attempt = 0; attempt < MAX_RETRIES; ++attempt) {
+        // ДОБАВЛЕН ФЛАГ -k
         const string cmd = withSilentStderr(
-            "curl -fsSL --max-time 30 -H \"User-Agent: LibraryCPP/1.0\" \"" + url + "\"");
+            "curl -fsSL -k --max-time 30 -H \"User-Agent: LibraryCPP/1.0\" \"" + url + "\"");
         resp = readCommandOutput(cmd);
         logMessage("DEBUG", "Google Books response length: " + to_string(resp.length()));
         if (!resp.empty() && resp.find("\"items\"") != string::npos) {
@@ -1237,7 +1234,8 @@ bool downloadCoverImage(const string& coverUrl, const string& isbnOrTitle) {
     }
     filename = filename.substr(0, 100) + ".jpg";
     const string fullPath = string(IMAGES_DIR_NAME) + "/" + filename;
-    string command = "curl -fsSL --max-time 10 -o \"" + fullPath + "\" \"" + coverUrl + "\"";
+    // ДОБАВЛЕН ФЛАГ -k
+    string command = "curl -fsSL -k --max-time 10 -o \"" + fullPath + "\" \"" + coverUrl + "\"";
     logMessage("DEBUG", "Downloading cover: " + coverUrl + " -> " + fullPath);
     readCommandOutput(command);
     if (fileExists(fullPath)) {

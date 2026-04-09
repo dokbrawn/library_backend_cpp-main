@@ -1,35 +1,47 @@
-FROM --platform=linux/arm64 ubuntu:22.04
+# ====================== BUILD STAGE ======================
+FROM --platform=linux/arm64 ubuntu:22.04 AS builder
 
-# Устанавливаем все необходимые пакеты
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git cmake ninja-build build-essential ca-certificates pkg-config \
     libegl1 libgles2 libgl1-mesa-dev libgl1-mesa-dri \
     libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-    libxcursor-dev libxi-dev libpulse0 libasound2 libdrm-dev \
+    libxcursor-dev libxi-dev libpulse0 libasound2 \
+    libdrm-dev libgbm-dev libsystemd-dev \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
-# Копируем bundle и engine
-COPY --from=library-flutter:arm64 /app/final/bundle /app/bundle
-COPY --from=library-flutter:arm64 /opt/flutter/bin/cache/artifacts/engine/linux-arm64 /app/engine
-
-# Собираем flutter-pi
+# Клонируем flutter-pi (кэшируется)
 RUN git clone https://github.com/ardera/flutter-pi.git /opt/flutter-pi
 
 WORKDIR /opt/flutter-pi/build
 
+# Полная сборка flutter-pi
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release \
              -DENABLE_EGL=ON \
              -DENABLE_GLES=ON \
              -DENABLE_VULKAN=OFF \
     && make -j2
 
+# ====================== FINAL STAGE ======================
+FROM --platform=linux/arm64 ubuntu:22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libegl1 libgles2 libgl1-mesa-dri \
+    libx11-6 libxext6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
+    libpulse0 libasound2 libdrm2 libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем готовый бинарник flutter-pi
+COPY --from=builder /opt/flutter-pi/build/flutter-pi /usr/local/bin/flutter-pi
+
+# Копируем приложение (bundle + engine)
+COPY --from=library-flutter:arm64 /app/final/bundle /app/bundle
+COPY --from=library-flutter:arm64 /opt/flutter/bin/cache/artifacts/engine/linux-arm64 /app/engine
+
 WORKDIR /app
 
-CMD echo "==========================================" && \
-    echo "   Запуск через flutter-pi" && \
-    echo "==========================================" && \
-    /opt/flutter-pi/build/flutter-pi \
-        --release \
-        --bundle /app/bundle \
-        --engine /app/engine
+# Сразу запускаем приложение после старта контейнера
+CMD ["/usr/local/bin/flutter-pi", \
+     "--release", \
+     "--bundle", "/app/bundle", \
+     "--engine", "/app/engine"]

@@ -224,3 +224,5 @@ connection to server at "localhost" (127.0.0.1), port 5432 failed: ВАЖНО:  
 2026-03-25 03:04:04 [INFO] Migrations completed
 2026-03-25 03:04:04 [INFO] Migrations completed
 2026-03-25 03:04:08 [INFO] Migrations completed
+2026-04-08 19:00:27 [INFO] Migrations completed
+2026-04-08 19:00:27 [WARNING] Backup failed via pg_dump
